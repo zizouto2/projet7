@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+transformers
+torch
+sentencepiece
+protobuf
+requests
+accelerate>=0.26.0
+pydantic
+pydantic-settings
+auto-gptq
