@@ -1,28 +1,18 @@
 @echo off
 echo ========================================
-echo Lancement de l'assistant financier IA...
+echo  Lancement de l'assistant financier IA
 echo ========================================
 
-:: Activer l'environnement virtuel s'il existe
+:: Activer l'environnement virtuel si présent
 if exist "venv\Scripts\activate.bat" (
     call venv\Scripts\activate.bat
     echo ✅ Environnement virtuel activé.
+) else (
+    echo ⚠️ Aucun environnement virtuel trouvé. Assurez-vous d'en avoir un si besoin.
 )
 
-:: Charger les variables d'environnement depuis le fichier .env (si tu utilises Python dotenv)
-setlocal EnableDelayedExpansion
-for /f "usebackq delims=" %%a in (".env") do (
-    set "line=%%a"
-    if not "!line!"=="" (
-        echo !line! | findstr /b /r "[A-Z_][A-Z_0-9]*=" >nul
-        if !errorlevel! == 0 (
-            for /f "tokens=1,* delims==" %%i in ("!line!") do set "%%i=%%j"
-        )
-    )
-)
-
-:: Lancer le serveur FastAPI avec Uvicorn
-echo 🚀 Lancement de l'API...
+:: Lancer le serveur Uvicorn
+echo 🚀 Lancement du serveur FastAPI avec uvicorn...
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
 pause

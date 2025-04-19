@@ -9,3 +9,4 @@ accelerate>=0.26.0
 pydantic
 pydantic-settings
 auto-gptq
+pytest

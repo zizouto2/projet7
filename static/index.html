@@ -1,51 +1,65 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <title>Assistant IA - Finance</title>
-    <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; }
-        textarea { width: 100%; height: 100px; margin-bottom: 10px; }
-        button { padding: 10px 20px; }
-        #response, #news { white-space: pre-wrap; margin-top: 20px; background: #f1f1f1; padding: 10px; border-radius: 5px; }
-    </style>
+  <meta charset="UTF-8">
+  <title>Assistant Financier IA</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 700px; margin: auto; padding: 20px; }
+    textarea { width: 100%; height: 100px; margin-bottom: 10px; }
+    button { padding: 10px 20px; margin-bottom: 10px; }
+    #response, #history, #news { white-space: pre-wrap; background: #f9f9f9; padding: 10px; border-radius: 5px; margin-top: 10px; }
+  </style>
 </head>
 <body>
-    <h1>Assistant IA - Finance</h1>
-    <p>Posez une question liée à la finance :</p>
-    <textarea id="question" placeholder="Ex: Quels sont les risques d’un investissement en crypto ?"></textarea>
-    <br>
-    <button onclick="askQuestion()">Envoyer</button>
+  <h1>Assistant IA – Finance</h1>
+  <p>Posez une question liée à la finance, la bourse ou l’investissement :</p>
+  <textarea id="question" placeholder="Exemple : Je veux acheter Apple"></textarea><br>
+  <button onclick="askQuestion()">Envoyer</button>
+  <button onclick="clearHistory()">Effacer l'historique</button>
 
-    <div id="response"></div>
-    <div id="news"></div>
+  <div id="response"></div>
+  <div id="news"></div>
+  <div id="history"></div>
 
-    <script>
-        async function askQuestion() {
-            const question = document.getElementById('question').value;
-            const responseBox = document.getElementById('response');
-            const newsBox = document.getElementById('news');
-            responseBox.innerHTML = "Chargement de la réponse...";
-            newsBox.innerHTML = "";
+  <script>
+    async function askQuestion() {
+      const question = document.getElementById("question").value;
+      const responseBox = document.getElementById("response");
+      const historyBox = document.getElementById("history");
+      const newsBox = document.getElementById("news");
 
-            const res = await fetch('/ask', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question })
-            });
+      responseBox.innerHTML = "Chargement...";
+      newsBox.innerHTML = "";
 
-            const data = await res.json();
-            responseBox.innerHTML = "<strong>Réponse de l'IA :</strong><br>" + data.response;
+      const res = await fetch("/ask", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question })
+      });
 
-            if (data.news && data.news.length > 0) {
-                let html = "<strong>Actualités liées :</strong><ul>";
-                data.news.forEach(article => {
-                    html += `<li><a href="${article.link}" target="_blank">${article.title}</a></li>`;
-                });
-                html += "</ul>";
-                newsBox.innerHTML = html;
-            }
-        }
-    </script>
+      const data = await res.json();
+      responseBox.innerHTML = "<strong>Réponse :</strong><br>" + data.response;
+
+      if (data.news && data.news.length > 0) {
+        let html = "<strong>Actualités détectées :</strong><ul>";
+        data.news.forEach(article => {
+          html += `<li><a href="${article.link}" target="_blank">${article.title}</a></li>`;
+        });
+        html += "</ul>";
+        newsBox.innerHTML = html;
+      }
+
+      if (data.history_summary) {
+        historyBox.innerHTML = "<strong>Historique des 3 dernières questions (" + data.word_count + " mots) :</strong><br>" + data.history_summary;
+      }
+    }
+
+    function clearHistory() {
+      fetch("/clear-history", { method: "POST" })
+        .then(() => {
+          document.getElementById("history").innerHTML = "<em>Historique effacé.</em>";
+        });
+    }
+  </script>
 </body>
 </html>

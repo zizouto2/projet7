@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 import logging
+from collections import deque
 
 from app.config import settings
 from app.model_loader import generator, tokenizer
@@ -24,11 +25,18 @@ logging.basicConfig(
     ]
 )
 
+# Historique limité aux 3 dernières interactions
+chat_history = deque(maxlen=3)
+
 SYSTEM_PROMPT = (
-    "Tu es un expert financier spécialisé dans l’économie, la comptabilité, la bourse et l’investissement. "
-    "Tu ne dois répondre qu’à des questions exclusivement financières. Pour toute question qui ne relève pas de la finance, "
-    "réponds immédiatement : 'Je suis désolé, je ne peux répondre qu’à des questions financières.' "
-    "Si un nom d'entreprise cotée ou un actif financier connu est mentionné (comme Apple, Tesla, etc.), considère qu'on parle de finance."
+    "Tu es un expert en finance, spécialisé dans l’économie, la comptabilité, la bourse et l’investissement.\n\n"
+    "Tu ne dois répondre qu’à des questions **financières**. Si une question ne concerne pas la finance, "
+    "tu dois répondre : **'Je suis désolé, je ne peux répondre qu’à des questions financières.'**\n\n"
+    "✅ Si une question mentionne le nom d’une entreprise cotée en bourse ou d’un actif financier connu (exemples : Apple, Tesla, Amazon, Bitcoin, CAC 40, Nasdaq…), "
+    "considère automatiquement qu’il s’agit d’une **question liée à la finance**, même si la formulation est vague.\n\n"
+    "❗ Ne rejette jamais une question qui contient le nom d’un actif financier ou d’une entreprise cotée.\n"
+    "Tu dois alors fournir une réponse dans le contexte financier, comme : investissement, analyse, performance, risques, etc.\n\n"
+    "📝 Réponds toujours en un maximum de 500 mots."
 )
 
 @app.post("/ask")
@@ -50,15 +58,20 @@ async def ask(request: Request):
         news_items = perform_targeted_search(query)
 
     if news_items:
-        search_context = "".join(
-            f"Titre: {item['title']}\nExtrait: {item['snippet']}\nURL: {item['link']}\n\n"
-            for item in news_items
-        )
+        search_context = "Actualités liées :\n\n" + "\n".join(
+            f"- {item['title']}\n  {item['link']}" for item in news_items
+        ) + "\n\n"
+
+    # Ajout de l'historique dans le prompt
+    chat_history_text = "\n\n".join(
+        f"Q: {entry['question']}\nR: {entry['answer']}" for entry in chat_history
+    )
+    context_block = f"{search_context}{chat_history_text}".strip()
 
     prompt = tokenizer.apply_chat_template(
         [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": question if not search_context else f"{search_context}\n{question}"}
+            {"role": "user", "content": question if not context_block else f"{context_block}\n{question}"}
         ],
         tokenize=False,
         add_generation_prompt=True
@@ -67,7 +80,7 @@ async def ask(request: Request):
     try:
         outputs = generator(
             prompt,
-            max_new_tokens=256,
+            max_new_tokens=500,
             do_sample=True,
             temperature=0.7,
             top_p=0.9
@@ -78,7 +91,27 @@ async def ask(request: Request):
         logging.error(f"Erreur lors de la génération : {e}")
         response = "Une erreur est survenue lors de la génération de la réponse."
 
-    return {"response": response, "news": news_items}
+    # Mise à jour de l'historique
+    chat_history.append({"question": question, "answer": response})
+
+    # Création d’un résumé de l’historique (max 500 mots)
+    history_summary = "\n\n".join(
+        f"Q: {entry['question']}\nR: {entry['answer']}" for entry in list(chat_history)
+    )
+    total_words = len(history_summary.split())
+    summary_text = history_summary if total_words <= 500 else " ".join(history_summary.split()[:500]) + "..."
+
+    return {
+        "response": response,
+        "news": news_items,
+        "history_summary": summary_text,
+        "word_count": len(summary_text.split())
+    }
+
+@app.post("/clear-history")
+async def clear_history():
+    chat_history.clear()
+    return {"message": "Historique effacé."}
 
 @app.get("/")
 async def index():
@@ -88,4 +121,4 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
